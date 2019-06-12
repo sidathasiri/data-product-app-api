@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, abort, request 
 from flask_cors import CORS
 import pandas as pd  
 import numpy as np
@@ -113,6 +113,49 @@ def trainingPlot():
     score = accuracy_score(y_test, y_pred)
     return json.dumps({"url": "http://localhost:5000/loss.png", "score": score})
 
+@app.route('/predict', methods=['POST']) 
+def foo():
+    if not request.json:
+        abort(400)
+    submittedData = request.json
+    subDF = pd.DataFrame([submittedData])
+
+    data=pd.read_csv('online_shoppers_intention.csv')
+    data['OperatingSystems']=data['OperatingSystems'].astype(str)
+    subDF['OperatingSystems']=subDF['OperatingSystems'].astype(str)
+    data['Browser']=data['Browser'].astype(str)
+    subDF['Browser']=subDF['Browser'].astype(str)
+    data['Region']=data['Region'].astype(str)
+    subDF['Region']=subDF['Region'].astype(str)
+    data['TrafficType']=data['TrafficType'].astype(str)
+    subDF['TrafficType']=subDF['TrafficType'].astype(str)
+    booleandf = data.select_dtypes(include=[bool])
+    booleanDictionary = {True: 'TRUE', False: 'FALSE'}
+    subDF["Revenue"] = "FALSE"
+
+    for column in booleandf:
+        data[column] = data[column].map(booleanDictionary)
+        subDF[column] = subDF[column].map(booleanDictionary)
+    combine = [data]
+    opinion_mapping = {"FALSE": 0, "TRUE": 1}
+    for dataset in combine:
+        dataset['Revenue'] = dataset['Revenue'].map(opinion_mapping)
+    y=data['Revenue']
+    del data['Revenue']
+    del subDF["Revenue"]
+    data.append(subDF, ignore_index=True)
+    data = pd.get_dummies(data)
+    subDF = data.iloc[-1]
+    X_train, X_test, y_train, y_test = train_test_split(data, y, test_size=0.2, random_state=0)  
+    clf = MLPClassifier(hidden_layer_sizes=(100,100,100), max_iter=1000, alpha=0.0001,
+                        solver='sgd', verbose=10,  random_state=21,tol=0.000000001)
+    clf.fit(X_train,y_train)
+    prediction = clf.predict(subDF.values.reshape(1, -1))
+    print(prediction)
+    if(prediction[0] == 0):
+        return "False"
+    else:
+        return "True"  
 
 
 
